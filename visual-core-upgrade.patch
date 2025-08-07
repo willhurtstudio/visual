@@ -1,0 +1,470 @@
+diff --git a/Assets/_Core/Actions/RuntimeActionRouter.cs b/Assets/_Core/Actions/RuntimeActionRouter.cs
+new file mode 100644
+--- /dev/null
++++ b/Assets/_Core/Actions/RuntimeActionRouter.cs
+@@ -0,0 +60 @@
++using UnityEngine;
++using System.Collections.Generic;
++/// <summary>
++/// Lets users pick multiple actions (enum) to execute when a Void event fires.
++/// This is the decoupled "router" between triggers (e.g., VolumeThreshold) and effects.
++/// </summary>
++public enum UserActionType {
++    ChangeBackgroundColor,
++    ScaleObject,
++    SpinObject
++}
++
++public interface IUserAction { UserActionType ActionType { get; } void Execute(); }
++
++public class ChangeBackgroundColor : MonoBehaviour, IUserAction {
++    public Camera targetCamera;
++    public Color color = Color.red;
++    public UserActionType ActionType => UserActionType.ChangeBackgroundColor;
++    public void Execute(){ if (targetCamera) targetCamera.backgroundColor = color; }
++}
++public class ScaleObject : MonoBehaviour, IUserAction {
++    public Transform target;
++    public Vector3 scale = new Vector3(2,2,2);
++    public UserActionType ActionType => UserActionType.ScaleObject;
++    public void Execute(){ if (target) target.localScale = scale; }
++}
++public class SpinObject : MonoBehaviour, IUserAction {
++    public Transform target;
++    public float speed = 180f;
++    public UserActionType ActionType => UserActionType.SpinObject;
++    public void Execute(){ if (target) target.Rotate(Vector3.up, speed * Time.deltaTime); }
++}
++
++public class RuntimeActionRouter : MonoBehaviour {
++    [Header("Trigger")]
++    public VoidEventChannelSO triggerEvent;
++
++    [Header("Selection (editable at runtime)")]
++    public List<UserActionType> selected = new List<UserActionType>();
++
++    [Header("Action Implementations on this GameObject")]
++    public List<MonoBehaviour> actionScripts = new List<MonoBehaviour>();
++
++    Dictionary<UserActionType, IUserAction> map = new Dictionary<UserActionType, IUserAction>();
++
++    void Awake(){
++        map.Clear();
++        foreach (var mb in actionScripts){
++            if (mb is IUserAction a) map[a.ActionType] = a;
++        }
++    }
++    void OnEnable(){ if (triggerEvent!=null) triggerEvent.OnRaised += OnTrigger; }
++    void OnDisable(){ if (triggerEvent!=null) triggerEvent.OnRaised -= OnTrigger; }
++
++    void OnTrigger(){
++        foreach (var t in selected){
++            if (map.TryGetValue(t, out var a)) a.Execute();
++        }
++    }
++}
+
+diff --git a/Assets/_Core/Audio/VolumeThreshold.cs b/Assets/_Core/Audio/VolumeThreshold.cs
+new file mode 100644
+--- /dev/null
++++ b/Assets/_Core/Audio/VolumeThreshold.cs
+@@ -0,0 +27 @@
++using UnityEngine;
++/// <summary>
++/// Computes a simple RMS level from an AudioSource and raises a Void event when threshold is crossed upward.
++/// Use this as the trigger for user-selected actions.
++/// </summary>
++[RequireComponent(typeof(AudioSource))]
++public class VolumeThreshold : MonoBehaviour {
++    public FloatEventChannelSO levelEvent;
++    public VoidEventChannelSO thresholdPassedEvent;
++    [Range(0f, 1f)] public float threshold = 0.2f;
++    public int window = 256;
++
++    private AudioSource _src;
++    private float _prevLevel;
++    void Awake(){ _src = GetComponent<AudioSource>(); }
++    void Update(){
++        if (_src == null || !_src.isPlaying) return;
++        float[] buf = new float[Mathf.Max(32, window)];
++        _src.GetOutputData(buf, 0);
++        float sum = 0f; for(int i=0;i<buf.Length;i++) sum += buf[i]*buf[i];
++        float rms = Mathf.Sqrt(sum / buf.Length);
++        levelEvent?.Raise(rms);
++        // rising edge detection
++        if (_prevLevel < threshold && rms >= threshold) thresholdPassedEvent?.Raise();
++        _prevLevel = rms;
++    }
++}
+
+diff --git a/Assets/_Core/Editor/VisualCoreDemoBuilder.cs b/Assets/_Core/Editor/VisualCoreDemoBuilder.cs
+new file mode 100644
+--- /dev/null
++++ b/Assets/_Core/Editor/VisualCoreDemoBuilder.cs
+@@ -0,0 +122 @@
++#if UNITY_EDITOR
++using UnityEditor;
++using UnityEditor.SceneManagement;
++using UnityEngine;
++using UnityEngine.SceneManagement;
++
++public static class VisualCoreDemoBuilder {
++    [MenuItem("Tools/Visual Core/Build Sample Scene")]
++    public static void BuildSampleScene() {
++        // Create/ensure folders
++        string demoFolder = "Assets/_Core/DemoAssets";
++        if (!AssetDatabase.IsValidFolder("Assets/_Core")) AssetDatabase.CreateFolder("Assets", "_Core");
++        if (!AssetDatabase.IsValidFolder(demoFolder)) AssetDatabase.CreateFolder("Assets/_Core", "DemoAssets");
++
++        // Create SO events
++        var thresholdEvent = ScriptableObject.CreateInstance<VoidEventChannelSO>();
++        var levelEvent = ScriptableObject.CreateInstance<FloatEventChannelSO>();
++        var bpmEvent = ScriptableObject.CreateInstance<FloatEventChannelSO>();
++        var confEvent = ScriptableObject.CreateInstance<FloatEventChannelSO>();
++        AssetDatabase.CreateAsset(thresholdEvent, demoFolder + "/ThresholdPassed.asset");
++        AssetDatabase.CreateAsset(levelEvent, demoFolder + "/LevelEvent.asset");
++        AssetDatabase.CreateAsset(bpmEvent, demoFolder + "/BPMEvent.asset");
++        AssetDatabase.CreateAsset(confEvent, demoFolder + "/ConfidenceEvent.asset");
++
++        // Create Presets
++        var presetRed = ScriptableObject.CreateInstance<VisualPresetSO>();
++        presetRed.affectsBackground = true; presetRed.backgroundColor = Color.red;
++        presetRed.affectsTransform = true; presetRed.targetScale = new Vector3(2,2,2); presetRed.spinSpeed = 120;
++        AssetDatabase.CreateAsset(presetRed, demoFolder + "/Preset_Red.asset");
++
++        var presetBlue = ScriptableObject.CreateInstance<VisualPresetSO>();
++        presetBlue.affectsBackground = true; presetBlue.backgroundColor = Color.blue;
++        presetBlue.affectsTransform = true; presetBlue.targetScale = new Vector3(1,1,1); presetBlue.spinSpeed = 0;
++        AssetDatabase.CreateAsset(presetBlue, demoFolder + "/Preset_Blue.asset");
++
++        AssetDatabase.SaveAssets();
++
++        // New scene
++        var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
++
++        // Camera setup
++        Camera cam = Object.FindFirstObjectByType<Camera>();
++        if (cam == null) cam = new GameObject("Main Camera").AddComponent<Camera>();
++        cam.transform.position = new Vector3(0, 1.5f, -6f);
++        cam.transform.LookAt(Vector3.zero);
++
++        // Add PresetController on Camera
++        var presetCtrl = cam.gameObject.AddComponent<PresetController>();
++        presetCtrl.targetCamera = cam;
++
++        // Audio host with AudioSource + Tempo/Threshold
++        GameObject audioHost = new GameObject("AudioHost");
++        var src = audioHost.AddComponent<AudioSource>();
++        src.playOnAwake = true; src.loop = true; // Mic will stream into this by MicrophoneManager if you want
++        var mic = audioHost.AddComponent<MicrophoneManager>();
++        mic.inputLevelEvent = levelEvent;
++
++        var tempo = audioHost.AddComponent<TempoFollower>();
++        tempo.bpmEvent = bpmEvent;
++        tempo.confidenceEvent = confEvent;
++
++        var thresh = audioHost.AddComponent<VolumeThreshold>();
++        thresh.levelEvent = levelEvent;
++        thresh.thresholdPassedEvent = thresholdEvent;
++        thresh.threshold = 0.2f;
++
++        // A target cube to scale/spin
++        GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
++        cube.name = "Target";
++        cube.transform.position = Vector3.zero;
++        presetCtrl.targetTransform = cube.transform;
++
++        // Action router with actions on same GO
++        GameObject routerGO = new GameObject("RuntimeActionRouter");
++        var router = routerGO.AddComponent<RuntimeActionRouter>();
++        router.triggerEvent = thresholdEvent;
++
++        var actBg = routerGO.AddComponent<ChangeBackgroundColor>();
++        actBg.targetCamera = cam;
++        actBg.color = new Color(0.9f, 0.2f, 0.2f);
++        var actScale = routerGO.AddComponent<ScaleObject>();
++        actScale.target = cube.transform;
++        actScale.scale = new Vector3(2f, 2f, 2f);
++        var actSpin = routerGO.AddComponent<SpinObject>();
++        actSpin.target = cube.transform;
++        actSpin.speed = 180f;
++        router.actionScripts.Add(actBg);
++        router.actionScripts.Add(actScale);
++        router.actionScripts.Add(actSpin);
++        // Default to background + scale on trigger
++        router.selected.Add(UserActionType.ChangeBackgroundColor);
++        router.selected.Add(UserActionType.ScaleObject);
++
++        // Simple demo controller to switch presets on keys
++        var helper = new GameObject("DemoControls").AddComponent<DemoInputHelper>();
++        helper.presetController = presetCtrl;
++        helper.presetA = presetRed;
++        helper.presetB = presetBlue;
++
++        // Save scene
++        string scenePath = "Assets/_Core/DemoAssets/VisualCore_Sample.unity";
++        EditorSceneManager.SaveScene(scene, scenePath);
++        EditorUtility.DisplayDialog("Visual Core", "Sample scene created at:\n" + scenePath + "\n\nPlay it and speak into the mic or feed line audio.\nPress '1' to apply Red preset, '2' for Blue, 'F' to crossfade.", "OK");
++        AssetDatabase.Refresh();
++    }
++}
++
++// Helper MonoBehaviour to wire simple demo input
++public class DemoInputHelper : MonoBehaviour {
++    public PresetController presetController;
++    public VisualPresetSO presetA;
++    public VisualPresetSO presetB;
++    public float fadeSeconds = 1.0f;
++
++    void Update() {
++        if (presetController == null) return;
++        if (Input.GetKeyDown(KeyCode.Alpha1)) presetController.Apply(presetA);
++        if (Input.GetKeyDown(KeyCode.Alpha2)) presetController.Apply(presetB);
++        if (Input.GetKeyDown(KeyCode.F)) presetController.CrossfadeTo(presetB, fadeSeconds);
++    }
++}
++#endif
+
+diff --git a/Assets/_Core/Presets/PresetController.cs b/Assets/_Core/Presets/PresetController.cs
+new file mode 100644
+--- /dev/null
++++ b/Assets/_Core/Presets/PresetController.cs
+@@ -0,0 +68 @@
++using UnityEngine;
++using System.Collections;
++/// <summary>
++/// Applies VisualPresetSO to bound targets and supports smooth crossfades between presets.
++/// Bind references in the inspector (camera/transform).
++/// </summary>
++public class PresetController : MonoBehaviour {
++    [Header("Bindings")]
++    public Camera targetCamera;
++    public Transform targetTransform;
++
++    [Header("Runtime")]
++    public VisualPresetSO current;
++    public VisualPresetSO next;
++
++    private Coroutine _fadeRoutine;
++
++    public void Apply(VisualPresetSO preset) {
++        current = preset;
++        ApplyInstant(preset);
++    }
++
++    public void CrossfadeTo(VisualPresetSO preset, float duration){
++        if (_fadeRoutine != null) StopCoroutine(_fadeRoutine);
++        _fadeRoutine = StartCoroutine(FadeRoutine(preset, duration));
++    }
++
++    private void ApplyInstant(VisualPresetSO p){
++        if (p == null) return;
++        if (p.affectsBackground && targetCamera != null)
++            targetCamera.backgroundColor = p.backgroundColor;
++        if (p.affectsTransform && targetTransform != null) {
++            targetTransform.localScale = p.targetScale;
++            // spinSpeed is applied in Update for continuous rotation
++            next = p;
++        }
++    }
++
++    IEnumerator FadeRoutine(VisualPresetSO p, float duration){
++        if (p == null) yield break;
++        VisualPresetSO from = current;
++        float t = 0f;
++        Color fromCol = (from!=null)? from.backgroundColor : (targetCamera? targetCamera.backgroundColor : Color.black);
++        Vector3 fromScale = (from!=null)? from.targetScale : (targetTransform? targetTransform.localScale : Vector3.one);
++
++        while (t < 1f){
++            t += Time.deltaTime / Mathf.Max(0.0001f, duration);
++            float k = Mathf.SmoothStep(0f, 1f, t);
++            if (targetCamera && p.affectsBackground) {
++                targetCamera.backgroundColor = Color.Lerp(fromCol, p.backgroundColor, k);
++            }
++            if (targetTransform && p.affectsTransform) {
++                targetTransform.localScale = Vector3.Lerp(fromScale, p.targetScale, k);
++            }
++            yield return null;
++        }
++        current = p;
++        next = p;
++    }
++
++    void Update(){
++        // Apply continuous spin if preset requests it
++        var p = current;
++        if (p != null && p.affectsTransform && Mathf.Abs(p.spinSpeed) > 0.01f && targetTransform != null){
++            targetTransform.Rotate(Vector3.up, p.spinSpeed * Time.deltaTime, Space.Self);
++        }
++    }
++}
+
+diff --git a/Assets/_Core/Presets/VisualPresetSO.cs b/Assets/_Core/Presets/VisualPresetSO.cs
+new file mode 100644
+--- /dev/null
++++ b/Assets/_Core/Presets/VisualPresetSO.cs
+@@ -0,0 +14 @@
++using UnityEngine;
++/// <summary>
++/// A minimal visual preset that can be authored in-editor and applied at runtime.
++/// Extend this with more parameters as needed.
++/// </summary>
++[CreateAssetMenu(menuName = "Presets/Visual Preset")]
++public class VisualPresetSO : ScriptableObject {
++    public bool affectsBackground = true;
++    public Color backgroundColor = Color.black;
++
++    public bool affectsTransform = false;
++    public Vector3 targetScale = Vector3.one;
++    public float spinSpeed = 0f;
++}
+
+diff --git a/Assets/_Core/README_UPDATE.txt b/Assets/_Core/README_UPDATE.txt
+new file mode 100644
+--- /dev/null
++++ b/Assets/_Core/README_UPDATE.txt
+@@ -0,0 +17 @@
++This update adds:
++- _Core/Events: VoidEventChannelSO, FloatEventChannelSO
++- _Core/Audio: MicrophoneManager (hot-plug), VolumeThreshold (RMS + rising edge)
++- _Core/Display: ExternalDisplayManager (safe activation, removal handling)
++- _Core/Tempo: TempoFollower (spectral-flux BPM tracking + confidence)
++- _Core/Presets: VisualPresetSO, PresetController (apply & crossfade)
++- _Core/Actions: RuntimeActionRouter + example actions (background, scale, spin)
++
++How to try quickly:
++1) Create ScriptableObjects for events (Assets/Create/Events/...).
++2) Add an empty GameObject with:
++   - AudioSource (mic input routed)
++   - MicrophoneManager (optional), TempoFollower, VolumeThreshold
++3) Create a Camera, add PresetController (bind Camera + a Transform to manipulate).
++4) Add RuntimeActionRouter somewhere, hook its Trigger to VolumeThreshold.thresholdPassedEvent.
++5) In Router, add action components (ChangeBackgroundColor, ScaleObject, SpinObject) and tick which to run.
++6) Create a few VisualPresetSO assets and call PresetController.CrossfadeTo(...) to blend between them.
+
+diff --git a/Assets/_Core/Tempo/TempoFollower.cs b/Assets/_Core/Tempo/TempoFollower.cs
+new file mode 100644
+--- /dev/null
++++ b/Assets/_Core/Tempo/TempoFollower.cs
+@@ -0,0 +120 @@
++using UnityEngine;
++using System.Collections.Generic;
++/// <summary>
++/// TempoFollower estimates tempo (BPM) from incoming audio using spectral flux on FFT.
++/// - Designed for line-level electronic music: steady kicks & percussive content.
++/// - Emits current BPM and confidence via events for UI/logic to consume.
++/// - Can be blended with TapTempo as a fallback (external override).
++///
++/// Attach to a GameObject with an AudioSource (mic routed) and assign bpmEvent/confidenceEvent.
++/// </summary>
++[RequireComponent(typeof(AudioSource))]
++public class TempoFollower : MonoBehaviour {
++    public FloatEventChannelSO bpmEvent;
++    public FloatEventChannelSO confidenceEvent;
++    public bool useMicAudioSource = true;
++
++    [Header("FFT Settings")]
++    public int fftSize = 1024;
++    public FFTWindow window = FFTWindow.BlackmanHarris;
++
++    [Header("Peak Picking")]
++    [Tooltip("Multiplier for adaptive threshold (higher = fewer peaks).")]
++    public float thresholdMul = 1.5f;
++    [Tooltip("Window for adaptive threshold (frames).")]
++    public int thresholdWindow = 20;
++
++    [Header("Smoothing")]
++    [Tooltip("Smoothing of BPM output. 0=no smoothing, 1=very slow.")]
++    [Range(0f,1f)] public float bpmSmoothing = 0.85f;
++
++    [Header("Limits")]
++    public float minBPM = 70f;
++    public float maxBPM = 180f;
++
++    private AudioSource _src;
++    private float[] _spectrumA;
++    private float[] _spectrumB;
++    private float[] _prev;
++    private List<float> _fluxHistory = new List<float>(512);
++    private List<float> _peakTimes = new List<float>(64);
++    private float _bpm = 0f;
++    private float _conf = 0f;
++
++    void Awake() {
++        _src = GetComponent<AudioSource>();
++        _spectrumA = new float[fftSize];
++        _spectrumB = new float[fftSize];
++        _prev = new float[fftSize];
++    }
++
++    void Update() {
++        if (_src == null || !_src.isPlaying) return;
++
++        // Double-buffer spectrum to reduce allocation jitter
++        _src.GetSpectrumData(_spectrumA, 0, window);
++        float flux = 0f;
++        for (int i = 0; i < _spectrumA.Length; i++) {
++            float v = Mathf.Max(0f, _spectrumA[i] - _prev[i]);
++            flux += v;
++            _prev[i] = _spectrumA[i];
++        }
++        _fluxHistory.Add(flux);
++        if (_fluxHistory.Count > 1024) _fluxHistory.RemoveAt(0);
++
++        // Adaptive thresholding
++        int w = Mathf.Max(4, thresholdWindow);
++        float thr = 0f;
++        int start = Mathf.Max(0, _fluxHistory.Count - w);
++        for (int i = start; i < _fluxHistory.Count; i++) thr += _fluxHistory[i];
++        thr = (thr / Mathf.Max(1, _fluxHistory.Count - start)) * thresholdMul;
++
++        bool isPeak = flux > thr;
++        if (isPeak) {
++            _peakTimes.Add(Time.time);
++            if (_peakTimes.Count > 32) _peakTimes.RemoveAt(0);
++            EstimateBPM();
++        }
++
++        // Emit smoothed BPM/confidence
++        if (bpmEvent != null) bpmEvent.Raise(_bpm);
++        if (confidenceEvent != null) confidenceEvent.Raise(_conf);
++    }
++
++    void EstimateBPM() {
++        if (_peakTimes.Count < 4) return;
++        // Compute IOIs
++        List<float> iois = new List<float>(_peakTimes.Count - 1);
++        for (int i = 1; i < _peakTimes.Count; i++) {
++            iois.Add(_peakTimes[i] - _peakTimes[i-1]);
++        }
++        // Robust median
++        iois.Sort();
++        float median = iois[iois.Count / 2];
++        if (median <= 1e-3f) return;
++
++        float bpmRaw = 60f / median;
++        // Normalize to [minBPM, maxBPM] by doubling/halving
++        while (bpmRaw < minBPM) bpmRaw *= 2f;
++        while (bpmRaw > maxBPM) bpmRaw *= 0.5f;
++
++        // Confidence: inverse dispersion of IOIs
++        float mean = 0f;
++        for (int i = 0; i < iois.Count; i++) mean += iois[i];
++        mean /= iois.Count;
++        float var = 0f;
++        for (int i = 0; i < iois.Count; i++) {
++            float d = iois[i] - mean;
++            var += d*d;
++        }
++        var /= Mathf.Max(1, iois.Count-1);
++        float std = Mathf.Sqrt(var);
++        float c = Mathf.Clamp01(1f - (std / Mathf.Max(1e-3f, mean)));
++
++        // Exponential smoothing
++        _bpm = (_bpmSmoothing() * _bpm) + ((1f - _bpmSmoothing()) * bpmRaw);
++        _conf = (_bpmSmoothing() * _conf) + ((1f - _bpmSmoothing()) * c);
++    }
++
++    float _bpmSmoothing() => Mathf.Clamp01(bpmSmoothing);
++}
+
