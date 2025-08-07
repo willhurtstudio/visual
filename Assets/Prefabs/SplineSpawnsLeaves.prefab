@@ -1,0 +1,142 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &1373982198131510584
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1231497272459952266}
+  - component: {fileID: 230258843449567585}
+  - component: {fileID: 1354088981963649218}
+  - component: {fileID: 3051585034408112995}
+  m_Layer: 0
+  m_Name: SplineSpawnsLeaves
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1231497272459952266
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1373982198131510584}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &230258843449567585
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1373982198131510584}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dab5c7d4c32e743048dfca98e2d5914f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Spline:
+    m_EditModeType: 1
+    m_Knots: []
+    m_MetaData: []
+    m_Closed: 0
+    m_IntData:
+      m_Data: []
+    m_FloatData:
+      m_Data: []
+    m_Float4Data:
+      m_Data: []
+    m_ObjectData:
+      m_Data: []
+  m_Splines:
+  - m_EditModeType: 1
+    m_Knots: []
+    m_MetaData: []
+    m_Closed: 0
+    m_IntData:
+      m_Data: []
+    m_FloatData:
+      m_Data: []
+    m_Float4Data:
+      m_Data: []
+    m_ObjectData:
+      m_Data: []
+  m_Knots:
+    m_KnotsLink: []
+--- !u!114 &1354088981963649218
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1373982198131510584}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 65f9fdf48e8cd41a9a805a9dfb8e29b5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  splineContainer: {fileID: 230258843449567585}
+  numberOfPoints: 4
+  distanceFromCamera: {x: 10, y: 30}
+  curvePoints: []
+  distanceMinMax: {x: 0.11, y: 1}
+  angleMinMax: {x: 5, y: 22}
+--- !u!114 &3051585034408112995
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1373982198131510584}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b1f4065e5078c425ebfe41dc077f78af, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  sonicInputType: 9
+  enumIndex: 0
+  conversionType: 0
+  value: 0
+  outputMode: 0
+  smoothedValue: 0
+  threshold: 0.9
+  smoothedFallSpeed: 0.3
+  splineController: {fileID: 1354088981963649218}
+  splineContainer: {fileID: 230258843449567585}
+  counter: 0
+  spawnPoint: 0
+  stopSpawning: 0
+  spawnSizeMultipler: 20
+  spawnScales:
+  - 0.2
+  - 0.2
+  - 1
+  - 1
+  - 1
+  - 2
+  - 4
+  splineLength: 0
+  numLeavesToSpawn: 0
+  spawnEveryLengthOfSpline: 4
+  durationMinMax: {x: 3, y: 8}
+  leafTransforms:
+  - {fileID: 6827150331361650928, guid: 172fc1b5a7d3e43128728a83b4be6a08, type: 3}
+  - {fileID: 1678775174608212074, guid: ab1ab091b7c484ddda2a13b1190bfee8, type: 3}
+  - {fileID: 3005119926721849205, guid: 3cf58b7bae5ee4f98b14be4d4c119cbf, type: 3}
+  - {fileID: 3868053745108461458, guid: 3cf76131a7d714ddf9b80b37c0ab0d6e, type: 3}
+  materials:
+  - {fileID: 2100000, guid: eee836e7ecd3e40639211b0aae7a02db, type: 2}
+  - {fileID: 2100000, guid: 696c6e9cf536745dea707953a907ed1f, type: 2}
+  - {fileID: 2100000, guid: 6f836ecb5bd484274b2f1eeb98ae4c50, type: 2}
+  - {fileID: 2100000, guid: 4d6746109bc95464f8a888463918a554, type: 2}
